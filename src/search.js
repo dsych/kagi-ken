@@ -55,7 +55,7 @@ function parseSseStream(text) {
 }
 
 /**
- * Performs a search via Kagi's SSE streaming endpoint
+ * Performs a search on Kagi.com via SSE streaming endpoint
  *
  * @param {string} query - Search query
  * @param {string} token - Kagi session token
@@ -65,7 +65,7 @@ function parseSseStream(text) {
  * @param {number} [options.timeout=30000] - Timeout in milliseconds
  * @returns {Promise<Object>} Object containing data array with search results and related searches
  */
-export async function sseSearch(query, token, options = {}) {
+export async function search(query, token, options = {}) {
   if (!query || typeof query !== 'string') {
     throw new Error('Search query is required and must be a string');
   }
@@ -184,110 +184,7 @@ export async function sseSearch(query, token, options = {}) {
   }
 }
 
-/**
- * Performs a search on Kagi.com and returns structured results
- *
- * @param {string} query - Search query
- * @param {string} token - Kagi session token
- * @param {number} [limit=10] - Maximum number of search results to return (default: 10)
- * @returns {Promise<Object>} Object containing data array with search results and related searches
- */
-export async function search(query, token, limit = 10) {
-  if (!query || typeof query !== "string") {
-    throw new Error("Search query is required and must be a string");
-  }
 
-  if (!token || typeof token !== "string") {
-    throw new Error("Session token is required and must be a string");
-  }
-
-  if (
-    limit !== undefined &&
-    (typeof limit !== "number" || limit < 1 || !Number.isInteger(limit))
-  ) {
-    throw new Error("Limit must be a positive integer");
-  }
-
-  try {
-    const response = await fetch(
-      `https://kagi.com/html/search?q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          "User-Agent": USER_AGENT,
-          "Cookie": `kagi_session=${token}`,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("Invalid or expired session token");
-      }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    const results = parseSearchResults(html, limit);
-    return { data: results };
-  } catch (error) {
-    if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
-      throw new Error("Network error: Unable to connect to Kagi");
-    }
-    throw error;
-  }
-}
-
-/**
- * Parses HTML content to extract search results
- *
- * @param {string} html - HTML content from Kagi search page
- * @param {number} limit - Maximum number of search results to return
- * @returns {Array} Array of search results and related searches
- */
-function parseSearchResults(html, limit) {
-  const $ = cheerio.load(html);
-  const results = [];
-  let resultCount = 0;
-
-  try {
-    // Extract main search results
-    $(".search-result").each((_, element) => {
-      if (resultCount >= limit) return false; // Stop if limit reached
-      const result = extractSearchResult($, element);
-      if (result) {
-        results.push(result);
-        resultCount++;
-      }
-    });
-
-    // Extract grouped sub-results
-    if (resultCount < limit) {
-      $(".sr-group .__srgi").each((_, element) => {
-        if (resultCount >= limit) return false; // Stop if limit reached
-        const result = extractGroupedResult($, element);
-        if (result) {
-          results.push(result);
-          resultCount++;
-        }
-      });
-    }
-
-    // Extract related searches (always included regardless of limit)
-    const relatedSearches = extractRelatedSearches($);
-    if (relatedSearches.length > 0) {
-      results.push({
-        t: 1,
-        list: relatedSearches,
-      });
-    }
-
-    return results;
-  } catch (error) {
-    throw new Error(
-      "Failed to parse search results - unexpected HTML structure",
-    );
-  }
-}
 
 /**
  * Extracts a single search result from a search-result element
